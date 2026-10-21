@@ -45,13 +45,47 @@ const S = {
   installEvt: null
 };
 
-const INSURERS = ['United India','New India Assurance','National Insurance','Oriental Insurance','HDFC ERGO','ICICI Lombard','Bajaj Allianz','Tata AIG','Reliance General','SBI General','IFFCO Tokio','Royal Sundaram','Cholamandalam MS','Kotak General','Future Generali','Go Digit','Acko','Liberty General','Star Health','Care Health','Niva Bupa','LIC of India'];
-const TYPES = ['Motor','Health','Life','Fire','Marine/Transit','Other'];
-const VCATS = ['Private Car','Two Wheeler','Goods Carrying (GCV)','Passenger Carrying (PCV)','Commercial Vehicle','Tractor','Not Applicable'];
-const ENDO_TYPES = ['Nominee change','Address change','Name correction','Ownership transfer','Hypothecation add/remove','IDV change','Add-on / cover change','Mobile / email change','Cancellation','Other'];
-const CLAIM_ST = ['Registered','Documents Pending','Under Survey','Approved','Settled','Rejected'];
-const FU = ['Pending','Contacted','Quotation Sent','Renewed','Lost'];
-
+const INSURERS = [
+  'Acko General Insurance Limited',
+  'Bajaj Allianz General Insurance Company Limited',
+  'Cholamandalam MS General Insurance Company Limited',
+  'Generali Central Insurance Company Limited',
+  'Go Digit General Insurance Limited',
+  'HDFC Ergo General Insurance Company Limited',
+  'ICICI Lombard General Insurance Company Limited',
+  'IndusInd General Insurance Company Limited',
+  'IFFCO Tokio General Insurance Company Limited',
+  'Kiwi General Insurance Limited',
+  'Kshema General Insurance Limited',
+  'Liberty General Insurance Limited',
+  'Magma HDI General Insurance Company Limited',
+  'National Insurance Company Limited',
+  'Navi General Insurance Limited',
+  'Protec General Insurance Limited',
+  'Raheja QBE General Insurance Company Limited',
+  'Royal Sundaram General Insurance Company Limited',
+  'SBI General Insurance Company Limited',
+  'Shriram General Insurance Company Limited',
+  'Tata AIG General Insurance Company Limited',
+  'The New India Assurance Company Limited',
+  'The Oriental Insurance Company Limited',
+  'United India Insurance Company Limited',
+  'Universal Sompo General Insurance Company Limited',
+  'Zuno General Insurance Limited',
+  'Zurich Kotak General Insurance Company (India) Limited',
+  'Star Health and Allied Insurance Company Limited',
+  'Care Health Insurance Limited',
+  'Niva Bupa Health Insurance Company Limited',
+  'Aditya Birla Health Insurance Co. Limited',
+  'ManipalCigna Health Insurance Company Limited',
+  'Life Insurance Corporation of India',
+  'HDFC Life Insurance Company Limited',
+  'ICICI Prudential Life Insurance Company Limited',
+  'SBI Life Insurance Company Limited',
+  'Max Life Insurance Company Limited',
+  'Bajaj Allianz Life Insurance Company Limited',
+  'Tata AIA Life Insurance Company Limited'
+];
 /* ---------- data ---------- */
 async function loadAll(silent){
   const sb = S.sb;
