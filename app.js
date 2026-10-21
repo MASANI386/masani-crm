@@ -84,7 +84,60 @@ const INSURERS = [
   'SBI Life Insurance Company Limited',
   'Max Life Insurance Company Limited',
   'Bajaj Allianz Life Insurance Company Limited',
+  'Tata AIA Life Insurance Company Limited'// --- TYPE WISE FILTER ---
+const MOTOR_COMPANIES = [
+  'Acko General Insurance Limited',
+  'Bajaj Allianz General Insurance Company Limited',
+  'Cholamandalam MS General Insurance Company Limited',
+  'Generali Central Insurance Company Limited',
+  'Go Digit General Insurance Limited',
+  'HDFC Ergo General Insurance Company Limited',
+  'ICICI Lombard General Insurance Company Limited',
+  'IndusInd General Insurance Company Limited',
+  'IFFCO Tokio General Insurance Company Limited',
+  'Kiwi General Insurance Limited',
+  'Kshema General Insurance Limited',
+  'Liberty General Insurance Limited',
+  'Magma HDI General Insurance Company Limited',
+  'National Insurance Company Limited',
+  'Navi General Insurance Limited',
+  'Protec General Insurance Limited',
+  'Raheja QBE General Insurance Company Limited',
+  'Royal Sundaram General Insurance Company Limited',
+  'SBI General Insurance Company Limited',
+  'Shriram General Insurance Company Limited',
+  'Tata AIG General Insurance Company Limited',
+  'The New India Assurance Company Limited',
+  'The Oriental Insurance Company Limited',
+  'United India Insurance Company Limited',
+  'Universal Sompo General Insurance Company Limited',
+  'Zuno General Insurance Limited',
+  'Zurich Kotak General Insurance Company (India) Limited'
+];
+
+const HEALTH_COMPANIES = [
+  'Star Health and Allied Insurance Company Limited',
+  'Care Health Insurance Limited',
+  'Niva Bupa Health Insurance Company Limited',
+  'Aditya Birla Health Insurance Co. Limited',
+  'ManipalCigna Health Insurance Company Limited'
+];
+
+const LIFE_COMPANIES = [
+  'Life Insurance Corporation of India',
+  'HDFC Life Insurance Company Limited',
+  'ICICI Prudential Life Insurance Company Limited',
+  'SBI Life Insurance Company Limited',
+  'Max Life Insurance Company Limited',
+  'Bajaj Allianz Life Insurance Company Limited',
   'Tata AIA Life Insurance Company Limited'
+];
+
+function getCompaniesByType(type) {
+  if (type === 'Health') return HEALTH_COMPANIES;
+  if (type === 'Life') return LIFE_COMPANIES;
+  return MOTOR_COMPANIES; // default Motor
+}
 ];
 /* ---------- data ---------- */
 async function loadAll(silent){
