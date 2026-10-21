@@ -1062,26 +1062,5 @@ async function boot(){
   const { data } = await S.sb.auth.getSession();
   if(!S.user && !data.session) renderLogin();
 }
-     }
- // --- YAHAN SE MERA CODE PASTE KARO ---
- const MOTOR_LIST = MOTOR || [];
- const HEALTH_LIST = ['Star Health and Allied Insurance Company Limited','Care Health Insurance Limited','Niva Bupa Health Insurance Company Limited','Aditya Birla Health Insurance Co. Limited','ManipalCigna Health Insurance Company Limited'];
- const LIFE_LIST = ['Life Insurance Corporation of India','HDFC Life Insurance Company Limited','ICICI Prudential Life Insurance Company Limited','SBI Life Insurance Company Limited','Max Life Insurance Company Limited','Bajaj Allianz Life Insurance Company Limited','Tata AIA Life Insurance Company Limited'];
-
- function filterByType(){
-   const typeEl = document.querySelector('#type, select[name="type"]');
-   const compEl = document.querySelector('#company, #insurer, select[name="company"]');
-   if(!typeEl || !compEl) return;
-   let list = MOTOR_LIST;
-   if(typeEl.value.toLowerCase().includes('health')) list = HEALTH_LIST;
-   if(typeEl.value.toLowerCase().includes('life')) list = LIFE_LIST;
-   compEl.innerHTML = '<option value="">-- Company --</option>' + list.map(c=>`<option value="${c}">${c}</option>`).join('');
- }
- document.addEventListener('change', e=>{
-   if(e.target.id==='type' || e.target.name==='type') filterByType();
- });
- // --- YAHAN TAK ---
-
- boot();
 boot();
 })();
