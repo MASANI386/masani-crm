@@ -11,13 +11,34 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Masani CRM">
-<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="styles.css?v=20261022">
 </head>
 <body>
 <div id="app"><div class="boot"><img src="logo.png" alt="Masani Finsure" width="240"><p>Load ho raha hai…</p></div></div>
 <div id="toast" role="status" aria-live="polite"></div>
+<script>
+(function(){
+  function box(msg){
+    var b=document.querySelector('.boot'); if(!b) return;
+    var d=b.querySelector('.diag'); if(!d){ d=document.createElement('div'); d.className='diag'; d.style.cssText='max-width:420px;margin-top:14px;padding:12px 14px;border-radius:18px;background:#fff;color:#a63f15;font-size:13px;text-align:left;box-shadow:0 6px 18px rgba(199,80,33,.2)'; b.appendChild(d); }
+    d.innerHTML='<b>App load nahi ho pa rahi.</b><br>'+msg+'<br><br><button id="rst" style="border:0;background:#c75021;color:#fff;padding:10px 16px;border-radius:12px;font-weight:700">Cache saaf karke dobara kholein</button>';
+    document.getElementById('rst').onclick=window.__resetApp;
+  }
+  window.__resetApp=function(){
+    var p=[]; if(navigator.serviceWorker&&navigator.serviceWorker.getRegistrations) p.push(navigator.serviceWorker.getRegistrations().then(function(r){return Promise.all(r.map(function(x){return x.unregister();}));}));
+    if(window.caches) p.push(caches.keys().then(function(k){return Promise.all(k.map(function(x){return caches.delete(x);}));}));
+    Promise.all(p).then(function(){ location.reload(); },function(){ location.reload(); });
+  };
+  window.addEventListener('error',function(e){
+    var t=e.target; if(t&&(t.src||t.href)&&t!==window){ box('File load nahi hui: '+(t.src||t.href)); return; }
+    box('Error: '+(e.message||'')+' ('+String(e.filename||'').split('/').pop()+':'+e.lineno+')');
+  },true);
+  window.addEventListener('unhandledrejection',function(e){ box('Error: '+((e.reason&&e.reason.message)||e.reason)); });
+  setTimeout(function(){ box('10 second me app shuru nahi hui. Internet check karein ya neeche button dabayein.'); },10000);
+})();
+</script>
 <script src="config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="app.js"></script>
+<script src="app.js?v=20261022"></script>
 </body>
 </html>

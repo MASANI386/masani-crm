@@ -1,4 +1,4 @@
-const V = 'masani-crm-v1';
+const V = 'masani-crm-v3';
 const SHELL = ['./','index.html','styles.css','app.js','config.js','logo.png','manifest.webmanifest','icons/icon-192.png','icons/icon-512.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(V).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== V).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
@@ -10,5 +10,5 @@ self.addEventListener('fetch', e => {
   const isLib = u.hostname === 'cdn.jsdelivr.net';
   if (!sameOrigin && !isLib) return;
   // network-first (taaki update turant mile), offline me cache
-  e.respondWith(fetch(e.request).then(r => { const cp = r.clone(); caches.open(V).then(c => c.put(e.request, cp)); return r; }).catch(() => caches.match(e.request).then(m => m || caches.match('index.html'))));
+  e.respondWith((sameOrigin && e.request.mode !== 'navigate' ? fetch(e.request, { cache: 'no-cache' }) : fetch(e.request)).then(r => { const cp = r.clone(); caches.open(V).then(c => c.put(e.request, cp)); return r; }).catch(() => caches.match(e.request).then(m => m || caches.match('index.html'))));
 });
