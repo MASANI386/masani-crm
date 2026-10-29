@@ -113,6 +113,9 @@ function getCompaniesByType(type){
 }
 const companyOptions = type => getCompaniesByType(type).map(i => `<option value="${esc(i)}">`).join('');
 const TYPES = ['Motor','Health','Life','Fire','Marine/Transit','Other'];
+const NCB_OPTS = ['0%','20%','25%','35%','45%','50%'];
+const PREV_TYPES = ['Comprehensive','Third Party'];
+const NEW_POLICY_COLS = ['prev_insurer','prev_expiry_date','ncb','prev_idv','prev_premium','prev_policy_type','hypo_bank','nominee_name','nominee_relation','cover_type','payment_link'];
 const VCATS = ['Private Car','Two Wheeler','Goods Carrying (GCV)','Passenger Carrying (PCV)','Commercial Vehicle','Tractor','Not Applicable'];
 const ENDO_TYPES = ['Nominee change','Address change','Name correction','Ownership transfer','Hypothecation add/remove','IDV change','Add-on / cover change','Mobile / email change','Cancellation','Other'];
 const CLAIM_ST = ['Registered','Documents Pending','Under Survey','Approved','Settled','Rejected'];
@@ -366,9 +369,21 @@ function policyForm(p){
   <div class="grid g2"><div class="f"><label>Gaadi category</label><select name="vehicle_category"><option value="">—</option>${VCATS.map(t => `<option ${p.vehicle_category===t?'selected':''}>${t}</option>`).join('')}</select></div>
   <div class="f"><label>Gaadi no. (RC)</label><input name="vehicle_reg" style="text-transform:uppercase" value="${esc(p.vehicle_reg)}" placeholder="MP04AB1234"></div></div>
   <div class="f"><label>Gaadi / policy ki detail (make, model, year, fuel)</label><input name="vehicle_desc" value="${esc(p.vehicle_desc)}"></div>
+  <div class="grid g2"><div class="f"><label>Cover type (is policy ka)</label><select name="cover_type"><option value="">—</option>${COVERS.map(t => `<option ${p.cover_type===t?'selected':''}>${t}</option>`).join('')}</select></div>
+  <div class="f"><label>Hypothecation bank (loan)</label><input name="hypo_bank" value="${esc(p.hypo_bank)}"></div></div>
+  <div class="f"><label>Payment link (optional)</label><input name="payment_link" type="url" inputmode="url" placeholder="https://…" value="${esc(p.payment_link)}"></div>
+  <div class="grid g2"><div class="f"><label>Nominee ka naam</label><input name="nominee_name" value="${esc(p.nominee_name)}"></div>
+  <div class="f"><label>Nominee se rishta</label><input name="nominee_relation" value="${esc(p.nominee_relation)}"></div></div>
   <div class="grid g3"><div class="f"><label>Issue date</label><input name="issue_date" type="date" value="${esc(p.issue_date || (p.id ? '' : today()))}"></div>
   <div class="f"><label>Start *</label><input name="start_date" type="date" required value="${esc(p.start_date || today())}"></div>
   <div class="f"><label>Expiry *</label><input name="expiry_date" type="date" required value="${esc(p.expiry_date || addYear(today()))}" data-touched="${p.id ? 1 : 0}"></div></div>
+  <div class="sec">📄 Pichle saal ki policy</div>
+  <div class="grid g2"><div class="f"><label>Pichli company</label><input name="prev_insurer" list="insl" value="${esc(p.prev_insurer)}"></div>
+  <div class="f"><label>Pichli expiry date</label><input name="prev_expiry_date" type="date" value="${esc(p.prev_expiry_date)}"></div></div>
+  <div class="grid g2"><div class="f"><label>NCB</label><select name="ncb"><option value="">—</option>${NCB_OPTS.map(t => `<option ${p.ncb===t?'selected':''}>${t}</option>`).join('')}</select></div>
+  <div class="f"><label>Pichli policy type</label><select name="prev_policy_type"><option value="">—</option>${PREV_TYPES.map(t => `<option ${p.prev_policy_type===t?'selected':''}>${t}</option>`).join('')}</select></div></div>
+  <div class="grid g2"><div class="f"><label>Pichla IDV ₹</label><input name="prev_idv" inputmode="numeric" value="${p.prev_idv ?? ''}"></div>
+  <div class="f"><label>Pichla premium ₹</label><input name="prev_premium" inputmode="numeric" value="${p.prev_premium ?? ''}"></div></div>
   <div class="sec">Premium</div>
   <div class="grid g3"><div class="f"><label>Net premium ₹ *</label><input name="net_premium" required inputmode="decimal" value="${p.net_premium ?? ''}"></div>
   <div class="f"><label>GST %</label><input name="gst_rate" inputmode="decimal" value="${p.gst_rate ?? 18}"></div>
@@ -432,11 +447,22 @@ async function savePolicy(form){
       net_premium: net, gst_rate: num(v('gst_rate')), gst_amount: Math.round((total - net) * 100) / 100, total_premium: total,
       commission_mode: 'NET_PREMIUM', total_expected_commission: exp, actual_commission_received: got, commission_pending: exp - got,
       sub_agent_id: v('sub_agent_id') || null, agent_commission: v('sub_agent_id') ? num(v('agent_commission')) : 0,
-      calculation_notes: v('calculation_notes') || null, updated_at: new Date().toISOString()
+      calculation_notes: v('calculation_notes') || null, updated_at: new Date().toISOString(),
+      prev_insurer: v('prev_insurer') || null, prev_expiry_date: v('prev_expiry_date') || null, ncb: v('ncb') || null,
+      prev_idv: v('prev_idv') ? Math.round(num(v('prev_idv'))) : null, prev_premium: v('prev_premium') ? Math.round(num(v('prev_premium'))) : null,
+      prev_policy_type: v('prev_policy_type') || null, hypo_bank: v('hypo_bank') || null,
+      payment_link: v('payment_link') || null, nominee_name: v('nominee_name') || null, nominee_relation: v('nominee_relation') || null, cover_type: v('cover_type') || null
     };
+    const write = r => id ? q(S.sb.from('policies').update(r).eq('id', id).select().single()) : q(S.sb.from('policies').insert(r).select().single());
     let saved;
-    if(id) saved = await q(S.sb.from('policies').update(row).eq('id', id).select().single());
-    else saved = await q(S.sb.from('policies').insert(row).select().single());
+    try { saved = await write(row); }
+    catch(e){
+      // purana database (setup.sql dobara run nahi hua) — naye columns chhodkar baaki save kar do
+      if(!/column|schema cache/i.test(errMsg(e)) || !NEW_POLICY_COLS.some(c => errMsg(e).includes(c))) throw e;
+      const r2 = { ...row }; NEW_POLICY_COLS.forEach(c => delete r2[c]);
+      saved = await write(r2);
+      toast('Pichli policy / nominee / loan wali details save nahi hui — setup.sql dobara run karein', 'error');
+    }
     const file = f.file && f.file.files[0];
     if(file){
       const up = await upload(file, 'policies/' + saved.id);
@@ -458,82 +484,212 @@ const MONTHS = 'jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec';
 const DATE_RE = '(\\d{1,2}[\\-\\/\\.]\\d{1,2}[\\-\\/\\.]\\d{2,4}|\\d{1,2}[\\-\\/ ]*(?:' + MONTHS + ')[a-z]*[\\-\\/ ,.]*\\d{4})';
 const pdfDate = t => parseDate(String(t).replace(/,/g, ' ').replace(/\s+/g, ' ').trim());
 const amtVal = t => { const v = parseFloat(String(t).replace(/,/g, '')); return isNaN(v) ? 0 : v; };
+const STATE_CODES = new Set('AN AP AR AS BR CH CG DD DL DN GA GJ HP HR JH JK KA KL LA LD MH ML MN MP MZ NL OD OR PB PY RJ SK TN TR TS UK UA UP WB BH'.split(' '));
+const VBRANDS = ['Maruti Suzuki','Maruti','Hyundai','Tata Motors','Tata','Mahindra and Mahindra','Mahindra','Kia','Toyota','Honda','Volkswagen','Skoda','MG Motor','Renault','Nissan','Hero MotoCorp','Hero Honda','Hero','Bajaj','TVS','Royal Enfield','Yamaha','Suzuki','Ashok Leyland','Eicher','BharatBenz','Force','Piaggio','Ola Electric','Ather','Jawa','KTM','Isuzu','Datsun','Ford','Chevrolet','Fiat','Jeep','Swaraj','Sonalika','Escorts','Montra','Atul','Lohia'];
+const COVERS = ['Package (Comprehensive)','Liability Only (TP)','Own Damage Only (SAOD)'];
+const FUEL_RE = 'petrol|diesel|cng|lpg|electric|hybrid';
+const titleCase = s => s.toLowerCase().replace(/\b[a-z]/g, c => c.toUpperCase());
+const TITLE_RE = /^\s*(?:mr|mrs|ms|miss|dr|shri|sri|smt|m\/s)\b\.?\s*/i;
+
+function cleanName(s){
+  if(!s) return '';
+  s = String(s).replace(/\(.*$/, '').replace(/\bGSTIN.*$/i, '').replace(/\d.*$/, '').replace(/^\s*(?:sri\s*\/\s*smt\s*)/i, '').replace(TITLE_RE, '').replace(/[^A-Za-z .]/g, ' ').replace(/\s+/g, ' ').trim();
+  if(s.length < 3 || s.length > 45 || /insurance|company|limited|ltd|policy|certificate|address|nominee|insured|date|birth|name/i.test(s)) return '';
+  return titleCase(s);
+}
+function tidyVeh(s){
+  return String(s).replace(/\(\s*\d{4}\s*-?\s*\)/g, ' ').replace(/\s*&\s*/g, ' ').replace(/,/g, ' ').replace(/\b(motors?|motorcycles?|ltd|limited|pvt|private|india)\b\.?/gi, ' ').replace(/\s*-\s*\d+\s*seater/i, ' ').replace(/\bGVW\s*\d+\b/i, ' ').replace(/\s+/g, ' ').trim();
+}
 
 function parsePolicyText(raw){
+  raw = String(raw || '').replace(/\r/g, '');
   const flat = raw.replace(/\s+/g, ' ');
   const low = flat.toLowerCase();
+  // premium ke liye: % hata do, ₹/Rs hata do (taaki "CGST(9%) 211" ya "CGST @9% ₹ 317" bhi mil jaye)
+  const fa = flat.replace(/\(?\s*@?\s*\d{1,2}(?:\.\d+)?\s*%\s*\)?/g, ' ').replace(/[₹`]/g, ' ').replace(/\brs\.?(?=\s*\d)/gi, ' ').replace(/\s+/g, ' ');
   const F = {}, found = [], notes = [];
   const set = (k, v, label) => { if(v !== '' && v != null && v !== 0){ F[k] = v; found.push(label); } };
 
-  // company
+  /* company */
   let best = null;
   INSURER_DB.forEach(([name, keys]) => keys.forEach(k => { const ix = low.indexOf(k); if(ix >= 0 && (!best || k.length > best.len || (k.length === best.len && ix < best.ix))) best = { name, len: k.length, ix }; }));
   if(best) set('insurer_name', best.name, 'Company');
 
-  // policy number
-  const pn = flat.match(/(?:policy|certificate)\s*(?:number|no\.?|#)\s*[:\-]?\s*([A-Z0-9][A-Z0-9\/\-]{5,34})/i);
-  if(pn && /\d/.test(pn[1])) set('policy_number', pn[1].replace(/[\/\-]$/, ''), 'Policy number');
-  const pv = flat.match(/(?:previous|prev\.?|expiring|old)\s*(?:year\s*)?policy\s*(?:number|no\.?)\s*[:\-]?\s*([A-Z0-9][A-Z0-9\/\-]{5,34})/i);
-  if(pv && /\d/.test(pv[1]) && pv[1] !== F.policy_number) set('previous_policy_number', pv[1], 'Purani policy no.');
+  /* policy number */
+  let pnum = '', m;
+  m = flat.match(/\b([A-Z]\d{8,12})\s*\/\s*\d{6,10}\s+Policy\s*No/);          // Digit: "D303610460 / 18102026 Policy No."
+  if(m) pnum = m[1];
+  if(!pnum) for(const mm of flat.matchAll(/(?:policy|certificate)\s*(?:number|no\.?|#)\s*[:\-]?\s*([A-Z0-9][A-Z0-9\/\-]{5,34})/gi)){
+    const v = mm[1].replace(/[\/\-]+$/, '');
+    if(/\d/.test(v) && v.length >= 6){ pnum = v; break; }
+  }
+  set('policy_number', pnum, 'Policy number');
+  let prev = '';
+  m = flat.match(/prev(?:ious)?\.?\s*policy\s*:[^()]{0,90}\(\s*pol(?:icy)?\s*no\s*:\s*([A-Z0-9][A-Z0-9\/\-]{5,34})/i);   // National
+  if(m) prev = m[1];
+  if(!prev) for(const mm of flat.matchAll(/(?:previous|prev\.?|expiring|old)\s*(?:year\s*)?policy\s*(?:number|no\.?)\s*[:\-]?\s*([A-Z0-9][A-Z0-9\/\-]{5,34})/gi)){
+    if(/\d/.test(mm[1]) && mm[1] !== pnum){ prev = mm[1]; break; }
+  }
+  set('previous_policy_number', prev, 'Purani policy no.');
 
-  // type & category
-  let ptype = 'Motor';
-  if(/health|mediclaim|hospitali[sz]ation|optima|sum insured.{0,40}hospital/.test(low)) ptype = 'Health';
+  /* motor? */
+  let reg = '', regIdx = -1;
+  for(const mm of flat.matchAll(/\b([A-Z]{2})[\s-]*(\d{1,2})[\s-]*([A-Z]{1,3})[\s-]*(\d{4})\b/g)){
+    if(STATE_CODES.has(mm[1])){ reg = mm[1] + mm[2].padStart(2, '0') + mm[3] + mm[4]; regIdx = mm.index; break; }
+  }
+  const isMotor = !!reg || /chassis|engine\s*no|registration\s*(?:no|number|mark)|motor\s*insurance|private\s*car|two[\s-]*wheeler/i.test(flat);
+  let ptype = 'Other';
+  if(isMotor) ptype = 'Motor';
+  else if(/health|mediclaim|hospitali[sz]ation|optima|sum insured.{0,40}hospital/.test(low)) ptype = 'Health';
   else if(/life insurance|term plan|sum assured|death benefit|maturity benefit/.test(low)) ptype = 'Life';
   else if(/standard fire|fire and special perils|bharat sookshma|bharat griha/.test(low)) ptype = 'Fire';
   else if(/marine|transit policy|cargo/.test(low)) ptype = 'Marine/Transit';
-  else if(!/motor|vehicle|chassis|registration|private car|two wheeler|engine/.test(low)) ptype = INSURER_DB.some(([n]) => n === F.insurer_name && /Health/.test(n)) ? 'Health' : 'Other';
   set('policy_type', ptype, 'Type');
+
   if(ptype === 'Motor'){
-    const cat = /two[\s-]*wheeler|motor\s*cycle|scooter|2\s*w\b/.test(low) ? 'Two Wheeler' : /goods\s*carrying|\bgcv\b/.test(low) ? 'Goods Carrying (GCV)' : /passenger\s*carrying|\bpcv\b|\btaxi\b|\bbus\b/.test(low) ? 'Passenger Carrying (PCV)' : /tractor/.test(low) ? 'Tractor' : /private\s*car|\bcar\b/.test(low) ? 'Private Car' : '';
-    set('vehicle_category', cat, 'Gaadi category');
-    const reg = flat.match(/\b([A-Z]{2}[ -]?\d{1,2}[ -]?[A-Z]{1,3}[ -]?\d{4})\b/);
-    if(reg) set('vehicle_reg', reg[1].replace(/[^A-Za-z0-9]/g, '').toUpperCase(), 'Gaadi no.');
-    const brands = ['Maruti Suzuki','Maruti','Hyundai','Tata Motors','Tata','Mahindra','Kia','Toyota','Honda','Volkswagen','Skoda','MG Motor','Renault','Nissan','Hero MotoCorp','Hero','Bajaj','TVS','Royal Enfield','Yamaha','Suzuki','Ashok Leyland','Eicher','BharatBenz','Force','Piaggio','Ola Electric','Ather','Jawa','KTM'];
-    const mk = flat.match(/(?:make\s*\/?\s*model|make|manufacturer)\s*[:\-]?\s*([A-Za-z0-9][A-Za-z0-9 \/\-\.]{2,40}?)(?=\s{0,2}(?:model|variant|fuel|cc|year|chassis|engine|registration|colou?r|seating|$)|\s\d{4}\b)/i);
-    let desc = mk ? mk[1].trim() : (brands.find(b => low.includes(b.toLowerCase())) || '');
-    const md = flat.match(/\bmodel\s*[:\-]?\s*([A-Za-z0-9][A-Za-z0-9 \/\-\.]{1,30}?)(?=\s(?:variant|fuel|cc|year|chassis|engine|registration|colou?r|seating)|$)/i);
-    if(md && desc && !desc.toLowerCase().includes(md[1].toLowerCase())) desc += ' ' + md[1].trim();
-    const fuel = /diesel/.test(low) ? 'Diesel' : /\bcng\b/.test(low) ? 'CNG' : /petrol/.test(low) ? 'Petrol' : /electric|\bev\b/.test(low) ? 'Electric' : '';
-    const yr = flat.match(/(?:mfg\.?\s*year|year\s*of\s*(?:manufacture|mfg)|manufacturing\s*year|mfg\s*date|manufactured\s*in)\s*[:\-]?\s*(?:\d{1,2}[\-\/])?(?:\d{1,2}[\-\/])?((?:19|20)\d{2})/i);
-    const parts = [desc, fuel, yr ? yr[1] : ''].filter(Boolean);
+    /* category */
+    const catOf = t => /two[\s-]*wheeler|motor\s*cycle|scooter|\bbike\b/i.test(t) ? 'Two Wheeler'
+      : /\bgccv\b|\bgcv\b|goods\s*carry|goods\s*vehicle|public\s*carrier/i.test(t) ? 'Goods Carrying (GCV)'
+      : /\bpcv\b|passenger\s*carry|\btaxi\b|\bbus\b|\bcab\b/i.test(t) ? 'Passenger Carrying (PCV)'
+      : /tractor/i.test(t) ? 'Tractor' : /private\s*car|\bcar\b/i.test(t) ? 'Private Car' : /miscellaneous|\bmisc\b/i.test(t) ? 'Commercial Vehicle' : '';
+    const cv = flat.match(/class\s*of\s*vehicle\s*[:\-]?\s*(.{0,60})/i);
+    const head = flat.slice(0, 2200);
+    set('vehicle_category', (cv && catOf(cv[1])) || catOf(head) || catOf(flat), 'Gaadi category');
+    /* cover type */
+    const coverOf = t => /liab\w*\s*only|act\s*only|third[\s-]*party\s*(?:only|liability\s*only)|\btp\s*only/i.test(t) ? COVERS[1]
+      : /stand[\s-]*alone\s*(?:own\s*damage|od)|own\s*damage\s*only|\bsaod\b/i.test(t) ? COVERS[2]
+      : /package|comprehensive/i.test(t) ? COVERS[0] : '';
+    let cover = coverOf(head) || coverOf(flat);
+    if(!cover && /basic\s*od\s*premium\s*[\d,]{3,}/i.test(flat)) cover = COVERS[0];
+    set('cover_type', cover, 'Cover type');
+    set('vehicle_reg', reg, 'Gaadi no.');
+
+    /* gaadi ki detail */
+    let desc = '';
+    for(const mm of flat.matchAll(/make\s*(?:&|and|\/)\s*model\s*[:\-]?\s*(.+?)\s+(?=type\s*of\s*body|reg\.?\s*no|registration|engine|chassis|year|fuel|cubic|seating|aa\s*membership|vehicle\s*idv|geographical)/gi)){
+      if(!/^(type|year|engine|chassis|cubic|seating|registration|reg|fuel|colou?r|body|gvw)\b/i.test(mm[1]) && /[A-Za-z]{3}/.test(mm[1])){ desc = tidyVeh(mm[1]); break; }
+    }
+    if(!desc){   // Royal Sundaram
+      const mk = flat.match(/make\s*of\s*the\s*vehicle\s+(.+?)\s+year/i), md = flat.match(/model\s*description\s+(.+?)\s+(?:engine|type\s*of\s*body|chassis)/i);
+      if(mk && md) desc = tidyVeh(mk[1] + ' ' + md[1]);
+    }
+    if(!desc){   // Digit
+      const mk = flat.match(/\bmake\s+([A-Za-z][A-Za-z0-9 ]{1,25}?)\s+engine\s*no/i), md = flat.match(/variant\s*\(\s*sub[\s-]*type\s*\)\s*(.+?)\s+body\s*type/i);
+      if(mk && md) desc = tidyVeh(mk[1] + ' ' + md[1]);
+    }
+    const brandRe = VBRANDS.map(b => b.replace(/ /g, '\\s+')).join('|');
+    if(!desc){   // SBI: "Honda,City & 1.5 V AT"
+      const sb = raw.match(new RegExp('^\\s*(' + brandRe + ')\\s*,\\s*([^\\n]{2,40}?)\\s*$', 'im'));
+      if(sb) desc = tidyVeh(sb[1] + ' ' + sb[2]);
+    }
+    if(!desc && regIdx >= 0){   // table wali layout (Oriental, Zuno): reg ke aage brand se shuru karke CC / saal tak
+      const seg = flat.slice(regIdx, regIdx + 320);
+      const bm = seg.match(new RegExp('\\b(' + brandRe + ')\\b', 'i'));
+      if(bm){
+        const tail = seg.slice(bm.index);
+        const end = tail.search(/\s(?:\d{1,3}(?:,\d{3})+\.\d{2}|\d{3,}\.\d{2}|(?:19|20)\d{2}\b)/);
+        desc = tidyVeh(end > 0 ? tail.slice(0, end) : tail.slice(0, 40));
+      }
+    }
+    if(!desc){ const b = VBRANDS.find(x => low.includes(x.toLowerCase())); if(b) desc = b; }
+    const fm = flat.match(new RegExp('fuel\\s*type\\s*[:\\-]?\\s*(' + FUEL_RE + ')', 'i')) || flat.match(new RegExp('type\\s*of\\s*fuel[^A-Za-z]{0,5}(' + FUEL_RE + ')', 'i')) || flat.match(new RegExp('(?:19|20)\\d{2}\\s+(' + FUEL_RE + ')\\b', 'i')) || raw.match(new RegExp('^\\s*(' + FUEL_RE + ')\\s*$', 'im'));
+    const fuel = fm ? titleCase(fm[1]).replace(/^Cng$/, 'CNG').replace(/^Lpg$/, 'LPG') : '';
+    let yr = '';
+    const yrs = [];
+    for(const re of [/year\s*of\s*(?:manufacture|mfg)\.?[^0-9]{0,45}((?:19|20)\d{2})/gi, /(?:manufacturing|mfg\.?)\s*year\s*[:\-]?\s*((?:19|20)\d{2})/gi, new RegExp('(?:' + FUEL_RE + ')\\s+((?:19|20)\\d{2})\\b', 'gi'), /\b((?:19|20)\d{2})\s+\d\s*\+\s*\d\b/g, new RegExp('\\b((?:19|20)\\d{2})\\s+(?:' + FUEL_RE + ')\\b', 'gi')])
+      for(const mm of flat.matchAll(re)) yrs.push(+mm[1]);
+    yr = yrs.find(y => y >= 1985 && y <= new Date().getFullYear() + 1) || '';
+    const parts = [desc, fuel, yr].filter(Boolean);
     if(parts.length) set('vehicle_desc', parts.join(', '), 'Gaadi detail');
+
+    /* hypothecation / financier */
+    let hyp = '';
+    const hl = raw.match(/hypothecat(?:ion|ed)\s*(?:agreement\s*)?(?:w\s*ith|with)?\s*[:\-]?[ \t]*([A-Za-z0-9][^\n]{2,70}?)(?:[ \t]{2,}|[ \t]*$)/im) || raw.match(/financier\s*name[ \t]*[:\-]?[ \t]*([A-Za-z0-9][^\n]{2,70}?)(?:[ \t]{2,}|[ \t]*$)/im) || raw.match(/hire\s*purchase\s*(?:\/\s*lessor\s*)?agreement\s*with\s*:[ \t]*([A-Za-z0-9][^\n]{2,70}?)(?:[ \t]{2,}|[ \t]*$)/im);
+    if(hl){ const h = hl[1].trim(); if(!/^(na|n\.a\.?|nil|none|null|not\s)/i.test(h) && !/agreement|clause|policy|the\s/i.test(h)) hyp = h.replace(/\s+/g, ' '); }
+    set('hypo_bank', hyp, 'Hypothecation (loan)');
+
+    /* nominee */
+    let nn = '', nr = '';
+    m = flat.match(/nominee\s*name\s+age\s+relationship\s+([A-Za-z][A-Za-z .]{1,40}?)\s+\d{1,3}\s+([A-Za-z][A-Za-z\-]+)/i);               // Oriental table
+    if(m){ nn = m[1]; nr = m[2].split('-')[0]; }
+    if(!nn){ m = flat.match(/name\s*and\s*age\s*of\s*nominee\s*:?\s*([A-Za-z][A-Za-z .]{1,40}?)\s*&\s*\d+\s*years?\s*relationship\s*with\s*insured\s*:?\s*([A-Za-z]+)/i); if(m){ nn = m[1]; nr = m[2]; } }   // Zuno
+    if(!nn){ m = raw.match(/nominee\s*name\s*:?[ \t]+([A-Za-z][A-Za-z .]{1,40}?)(?:[ \t]{2,}|[ \t]*$)/im); if(m && !/^(nominee|age|relation|relationship|name|details)\b/i.test(m[1])){ nn = m[1]; const r = raw.match(/relation(?:ship)?(?:\s*with)?[ \t]*:[ \t]*([A-Za-z]+)/i); if(r) nr = r[1]; } }
+    nn = cleanName(nn);
+    if(nn){ set('nominee_name', nn, 'Nominee'); if(nr && !/^(na|nil|age|years?)$/i.test(nr)) set('nominee_relation', titleCase(nr), 'Nominee relation'); }
   }
 
-  // customer
-  const nm = flat.match(/(?:name\s*of\s*(?:the\s*)?(?:insured|policy\s*holder|policyholder|proposer)|insured(?:'s)?\s*name|policy\s*holder(?:'s)?\s*name|proposer\s*name|customer\s*name|owner\s*name|name\s*of\s*owner)\s*[:\-]?\s*((?:mr|mrs|ms|dr|shri|smt|m\/s)\.?\s+)?([A-Za-z][A-Za-z .]{2,44}?)(?=\s+(?:address|mobile|phone|e-?mail|policy|contact|date|gstin|pan|registration|vehicle|insured|communication|period|age|dob|gender|\d)|\s*[:|]|$)/i);
-  if(nm){ const n = nm[2].trim().replace(/\s+/g, ' '); if(n.length >= 3 && !/^(the|and|for|insurance|limited|ltd)$/i.test(n)) set('customer_name', n.toLowerCase().replace(/\b[a-z]/g, c => c.toUpperCase()), 'Naam'); }
-  const mob = flat.match(/(?:mobile|phone|contact|cell|mob)\s*(?:no\.?|number)?\s*[:\-]?\s*(?:\+?91[\s-]?)?([6-9]\d{9})\b/i) || flat.match(/(?<!\d)(?:\+?91[\s-]?)?([6-9]\d{9})(?!\d)/);
-  if(mob) set('customer_mobile', mob[1], 'Mobile');
-  const em = [...flat.matchAll(/\b([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})\b/g)].map(m => m[1]).find(e => !/support|care|customer|service|claim|info@|cs@|helpdesk|grievance|enquiry|ombudsman|insurance|ergo|lombard|allianz|digit|tataaig|sbigen|bhartiaxa/i.test(e));
-  if(em) set('customer_email', em, 'Email');
+  /* customer ka naam (har company ka alag tareeka) */
+  let cname = '';
+  const nameTry = [
+    () => raw.match(/insured(?:'s|’s)?\s*name\s*:[ \t]*([^\n]+?)(?:\(GSTIN|[ \t]{2,}|[ \t]*$)/i),            // Oriental, Zuno
+    () => raw.match(/name\s*of\s*(?:the\s*)?insured[ \t]*:?[ \t]+([A-Za-z][A-Za-z .]+?)(?:[ \t]{2,}|[ \t]*$)/im),   // United
+    () => raw.match(/\bname[ \t]{1,4}([A-Z][A-Za-z .]+?)[ \t]{2,}vehicle\s*registration/),                   // Digit
+    () => raw.match(/received\s*with\s*thanks\s*from\s*(?:sri\s*\/\s*smt\s*)?([A-Za-z .]+?)\s*\n/i),          // National
+    () => raw.match(/^[ \t]*name[ \t]*:[ \t]+((?:mr|mrs|ms|miss|shri|smt)\.?[ \t]*[A-Za-z .]{2,40}?)[ \t]*$/im),
+    () => raw.match(/dear\s+((?:mr|mrs|ms|miss|shri|smt)\.?\s*[A-Za-z .]{3,40}?)\s*,/i),                    // SBI
+    () => raw.match(/^[ \t]*((?:MR|MRS|MS|MISS|SHRI|SMT)\.?[ \t]*[A-Z][A-Za-z .]{2,40}?)[ \t]*$/m),              // Royal, SBI (sirf naam wali line)
+    () => flat.match(/(?:name\s*of\s*(?:the\s*)?(?:policy\s*holder|policyholder|proposer)|policy\s*holder(?:'s)?\s*name|proposer\s*name|customer\s*name|owner\s*name|name\s*of\s*owner)\s*[:\-]?\s*([A-Za-z][A-Za-z .]{2,44}?)(?=\s+(?:address|mobile|phone|e-?mail|policy|contact|date|\d)|\s*[:|]|$)/i)
+  ];
+  for(const t of nameTry){ const r = t(); if(r){ const n = cleanName(r[1]); if(n){ cname = n; break; } } }
+  set('customer_name', cname, 'Naam');
+  /* NOTE: mobile / email jaan-boojh kar nahi bharte — PDF me aksar broker ka (ya masked) hota hai */
 
-  // dates
-  const D = new RegExp(DATE_RE, 'gi');
-  const per = flat.match(new RegExp('(?:period\\s*of\\s*insurance|policy\\s*period|insurance\\s*period|period\\s*of\\s*cover|risk\\s*period|policy\\s*(?:start|commencement))[\\s\\S]{0,90}?' + DATE_RE + '[\\s\\S]{0,70}?(?:to|upto|up\\s*to|till|until|-|–)[\\s\\S]{0,70}?' + DATE_RE, 'i'));
+  /* dates */
   let st = '', ex = '';
-  if(per){ st = pdfDate(per[1]); ex = pdfDate(per[2]); }
+  const i2 = flat.match(/\b(20\d{2}-\d{2}-\d{2})\s+(20\d{2}-\d{2}-\d{2})\b/);        // Digit: "2026-10-19 2027-10-18"
+  if(i2){ const a = pdfDate(i2[1]), b = pdfDate(i2[2]); if(a && b && Math.abs((new Date(b) - new Date(addYear(a))) / 864e5) <= 2){ st = a; ex = b; } }
+  if(!st){
+    const per = flat.match(new RegExp('(?:period\\s*of\\s*insurance|policy\\s*period|insurance\\s*period|period\\s*of\\s*cover|risk\\s*period|policy\\s*(?:start|commencement))[\\s\\S]{0,90}?' + DATE_RE + '[\\s\\S]{0,70}?(?:to|upto|up\\s*to|till|until|-|–)[\\s\\S]{0,70}?' + DATE_RE, 'i'));
+    if(per){ st = pdfDate(per[1]); ex = pdfDate(per[2]); }
+  }
   if(!st || !ex || ex <= st){
     st = ex = '';
-    const ds = [...new Set([...flat.matchAll(D)].map(m => pdfDate(m[1])).filter(Boolean))].sort();
+    const ds = [...new Set([...flat.matchAll(new RegExp(DATE_RE, 'gi'))].map(m => pdfDate(m[1])).filter(Boolean))].sort();
     for(const a of ds){ const t = addYear(a); if(ds.some(b => Math.abs((new Date(b) - new Date(t)) / 864e5) <= 2)){ st = a; ex = ds.find(b => Math.abs((new Date(b) - new Date(t)) / 864e5) <= 2); break; } }
     if(!st && ds.length >= 2){ st = ds[0]; ex = ds[ds.length - 1]; notes.push('Dates andaze se li gayi hain — check karein'); }
   }
   set('start_date', st, 'Start date'); set('expiry_date', ex, 'Expiry date');
-  const isd = flat.match(new RegExp('(?:date\\s*of\\s*issue|issue\\s*date|issued\\s*on|date\\s*of\\s*issuance)[^0-9]{0,25}' + DATE_RE, 'i'));
-  if(isd) set('issue_date', pdfDate(isd[1]), 'Issue date');
+  let isu = '';
+  for(const lab of ['date\\s*of\\s*issue', 'policy\\s*issue\\s*date', 'issue\\s*date', 'policy\\s*issued\\s*on', 'issued\\s*on', 'date\\s*of\\s*issuance', 'signed\\s+at\\s+[A-Za-z ]{2,30}?\\s+on(?:\\s+this)?', 'hands\\s+at\\s+[A-Za-z ]{2,30}?\\s+on']){
+    const mm = flat.match(new RegExp(lab + '[^0-9]{0,25}' + DATE_RE, 'i'));
+    if(mm){ const d = pdfDate(mm[1]); if(d && (!st || d <= addYear(st) && d >= '2000-01-01')){ isu = d; break; } }
+  }
+  if(!isu){ const tri = flat.match(/(\d{1,2}-[A-Za-z]{3}-\d{4})\s+(\d{1,2}-[A-Za-z]{3}-\d{4})\s+(\d{1,2}-[A-Za-z]{3}-\d{4})/); if(tri && pdfDate(tri[2]) === st) isu = pdfDate(tri[1]); }   // Digit
+  set('issue_date', isu, 'Issue date');
 
-  // premium
-  const A = '[^0-9\\n]{0,45}?(?:₹|rs\\.?|inr)?\\s*([\\d,]{3,}(?:\\.\\d{1,2})?)';
-  const find = list => { for(const l of list){ const m = flat.match(new RegExp(l + A, 'i')); if(m){ const v = amtVal(m[1]); if(v >= 100 && v < 1e8) return v; } } return 0; };
-  let total = find(['total\\s*(?:premium\\s*)?(?:amount\\s*)?payable','premium\\s*payable','amount\\s*payable','final\\s*premium','gross\\s*premium','total\\s*premium\\s*(?:\\(?\\s*)?(?:incl\\w*|with)\\s*\\.?\\s*(?:of\\s*)?(?:gst|tax\\w*)','invoice\\s*value','total\\s*premium']);
-  let net = find(['total\\s*premium\\s*\\(?\\s*(?:excl\\w*|before|without)\\s*\\.?\\s*(?:of\\s*)?(?:gst|tax\\w*)','premium\\s*before\\s*(?:gst|tax)','net\\s*premium','taxable\\s*(?:value|premium)','basic\\s*premium']);
-  const cg = find(['cgst']), sg = find(['sgst','utgst']), ig = find(['igst']), gs = find(['total\\s*gst','gst\\s*amount','gst','service\\s*tax']);
-  let gstAmt = (cg && sg) ? cg + sg : ig || gs || 0;
-  if(total && net && net >= total) net = 0;
-  if(total && !net){ if(gstAmt && gstAmt < total) net = Math.round((total - gstAmt) * 100) / 100; else { net = Math.round(total / 1.18 * 100) / 100; notes.push('Net premium andaze se (total ÷ 1.18) bhara hai — policy se milakar check karein'); } }
-  if(net && !total){ total = gstAmt && gstAmt < net ? Math.round((net + gstAmt) * 100) / 100 : Math.round(net * 1.18 * 100) / 100; notes.push('Total premium andaze se (net + 18% GST) bhara hai — check karein'); }
-  if(net && total){ set('net_premium', net, 'Net premium'); set('total_premium', total, 'Total premium'); const r = Math.round((total - net) / net * 10000) / 100; set('gst_rate', r >= 0 && r <= 30 ? r : 18, 'GST %'); }
+  /* premium */
+  const AMT = '(?<![A-Za-z0-9])(\\d[\\d,]*(?:\\.\\d{1,2})?)(?![\\d])';
+  const nums = (labels, lo, gap) => { const out = []; for(const l of labels) for(const mm of fa.matchAll(new RegExp(l + (gap || '[^0-9]{0,40}?') + AMT, 'gi'))){ const v = amtVal(mm[1]); if(v > lo && v < 1e7) out.push(v); } return out; };
+  let total = 0, net = 0, gstAmt = 0;
+  const dg = flat.match(/net\s*premium\s+igst\s+cgst\s+sgst\s+utgst\s+cess\s+gross\s*premium\s+\S+\s+\S+\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)/i);   // Digit table
+  if(dg){ net = +dg[1]; gstAmt = Math.round((+dg[2] + +dg[3] + +dg[4] + +dg[5] + +dg[6]) * 100) / 100; total = +dg[7]; }
+  else {
+    const strong = nums(['total\\s*payable\\s*premium', 'net\\s*payable', 'final\\s*premium', 'total\\s*amount(?:\\s*payable)?', 'gross\\s*premium', 'amount\\s*payable', 'premium\\s*payable', 'invoice\\s*value'], 100);
+    const cg = Math.max(0, ...nums(['(?<![A-Za-z])cgst'], 0, '[^0-9A-Za-z]{0,10}')), sg = Math.max(0, ...nums(['(?<![A-Za-z])sgst'], 0, '[^0-9A-Za-z]{0,10}'));
+    const gs = [];
+    if(cg && sg) gs.push(Math.round((cg + sg) * 100) / 100);
+    gs.push(...nums(['(?<![A-Za-z])igst', '(?<![A-Za-z])gst(?![A-Za-z])', 'total\\s*gst', 'gst\\s*amount'], 0, '[\\s:=\\-(]{0,8}'));
+    const ts = [...new Set(strong)].sort((a, b) => b - a), gl = [...new Set(gs)];
+    outer: for(const t of ts) for(const g of gl){ const r = t / g; if(r >= 4 && r <= 25){ total = t; gstAmt = g; break outer; } }
+    if(!total && ts.length) total = ts[0];
+    const weak = nums(['total\\s*premium', 'net\\s*premium', 'premium\\s*\\(\\s*a\\s*\\+\\s*b\\s*\\)', 'total\\s*liability\\s*premium', 'total\\s*tp\\s*premium', 'taxable\\s*(?:value|premium)', 'premium\\s*before\\s*(?:gst|tax)', 'basic\\s*premium'], 100);
+    const closest = (arr, tgt) => arr.reduce((b, c) => (b === null || Math.abs(c - tgt) < Math.abs(b - tgt)) ? c : b, null);
+    if(total && gstAmt){
+      const tgt = total - gstAmt, c = closest(weak, tgt);
+      net = (c !== null && Math.abs(c - tgt) <= 2.5) ? c : Math.round(tgt * 100) / 100;
+    } else if(total){
+      const c = closest(weak.filter(w => total / w > 1.04 && total / w < 1.32), total / 1.18);
+      if(c !== null) net = c; else { net = Math.round(total / 1.18 * 100) / 100; notes.push('Net premium andaze se (total ÷ 1.18) bhara hai — policy se milakar check karein'); }
+    } else if(weak.length){
+      net = weak[0]; total = Math.round(net * 1.18 * 100) / 100; notes.push('Total premium andaze se (net + 18% GST) bhara hai — check karein');
+    }
+  }
+  if(net && total){
+    set('net_premium', net, 'Net premium'); set('total_premium', total, 'Total premium');
+    let rate = Math.round((total - net) / net * 10000) / 100;
+    for(const s of [5, 12, 18, 28]) if(Math.abs(rate - s) <= 0.35) rate = s;
+    set('gst_rate', rate >= 0 && rate <= 30 ? rate : 18, 'GST %');
+  }
   return { fields: F, found: [...new Set(found)], notes };
 }
 
@@ -564,9 +720,9 @@ async function extractPolicyPdf(form, file){
     Object.entries(r.fields).forEach(([k, v]) => { if(f[k]) f[k].value = v; });
     if(r.fields.expiry_date) dateInit.dataset.touched = '1';
     refreshCompanies(form); policyCalc(form, '');
-    const want = ['Naam','Mobile','Policy number','Company','Start date','Expiry date','Net premium','Total premium'];
+    const want = ['Naam','Policy number','Company','Start date','Expiry date','Net premium','Total premium'];
     const miss = want.filter(w => !r.found.includes(w));
-    box.innerHTML = `<div class="ok b">✔ ${r.found.length} cheezein bhari: ${esc(r.found.join(', '))}</div>${miss.length ? `<div class="warn">⚠️ Nahi mila (haath se bharein): ${esc(miss.join(', '))}</div>` : ''}${r.notes.map(n => `<div class="warn">• ${esc(n)}</div>`).join('')}<div>Save karne se pehle sab ek baar PDF se milakar dekh lein.</div>`;
+    box.innerHTML = `<div class="ok b">✔ ${r.found.length} cheezein bhari: ${esc(r.found.join(', '))}</div>${miss.length ? `<div class="warn">⚠️ Nahi mila (haath se bharein): ${esc(miss.join(', '))}</div>` : ''}${r.notes.map(n => `<div class="warn">• ${esc(n)}</div>`).join('')}<div class="warn">📞 Mobile PDF se nahi bharta (usme aksar broker ka number hota hai) — customer ka mobile khud daalein.</div><div>Save karne se pehle sab ek baar PDF se milakar dekh lein.</div>`;
   } catch(e){
     box.innerHTML = `<span class="bad">PDF se data nahi nikla (${esc(errMsg(e))}). File save ho jayegi, details haath se bharein.</span>`;
   }
@@ -606,6 +762,8 @@ async function renderPolicySheet(){
       ${p.vehicle_reg ? `<span>Gaadi no.</span><span>${esc(p.vehicle_reg)}</span>` : ''}${p.vehicle_desc ? `<span>Detail</span><span>${esc(p.vehicle_desc)}</span>` : ''}
       <span>Period</span><span>${fdate(p.start_date)} → ${fdate(p.expiry_date)}</span>
       ${p.previous_policy_number ? `<span>Purani policy</span><span>${esc(p.previous_policy_number)}</span>` : ''}
+      ${p.cover_type ? `<span>Cover</span><span>${esc(p.cover_type)}</span>` : ''}${p.hypo_bank ? `<span>Loan (hypothecation)</span><span>${esc(p.hypo_bank)}</span>` : ''}${/^https?:\/\//i.test(p.payment_link || '') ? `<span>Payment link</span><span><a href="${esc(p.payment_link)}" target="_blank" rel="noopener noreferrer">Kholein ↗</a></span>` : ''}${p.nominee_name ? `<span>Nominee</span><span>${esc(p.nominee_name)}${p.nominee_relation ? ' (' + esc(p.nominee_relation) + ')' : ''}</span>` : ''}
+      ${p.prev_insurer ? `<span>Pichli company</span><span>${esc(p.prev_insurer)}${p.prev_policy_type ? ' • ' + esc(p.prev_policy_type) : ''}</span>` : ''}${p.prev_expiry_date ? `<span>Pichli expiry</span><span>${fdate(p.prev_expiry_date)}</span>` : ''}${p.ncb ? `<span>NCB</span><span>${esc(p.ncb)}</span>` : ''}${p.prev_idv ? `<span>Pichla IDV</span><span class="money">${inr(p.prev_idv)}</span>` : ''}${p.prev_premium ? `<span>Pichla premium</span><span class="money">${inr(p.prev_premium)}</span>` : ''}
       <span>Net premium</span><span class="money">${inr(p.net_premium)}</span><span>GST (${num(p.gst_rate)}%)</span><span class="money">${inr(p.gst_amount)}</span><span>Total premium</span><span class="money">${inr(p.total_premium)}</span></div></div>
     <div class="card"><h3>💰 Commission</h3><div class="kv"><span>Aapka commission</span><span class="money">${inr(p.total_expected_commission)}</span><span>Company se mila</span><span class="money">${inr(p.actual_commission_received)}</span><span>Company se baaki</span><span class="money ${num(p.commission_pending)>0?'warn':''}">${inr(p.commission_pending)}</span></div></div>
     <div class="card"><h3>🤝 Agent</h3>${ag ? `<div class="kv"><span>Agent</span><span>${esc(ag.name)}</span><span>Banta commission</span><span class="money">${inr(due)}</span><span>Diya gaya</span><span class="money ok">${inr(paid)}</span><span>Dena baaki</span><span class="money ${due-paid>0?'bad':''}">${inr(due - paid)}</span><span>Aapka munafa</span><span class="money b">${inr(num(p.total_expected_commission) - due)}</span></div>
