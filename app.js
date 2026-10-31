@@ -115,7 +115,8 @@ const companyOptions = type => getCompaniesByType(type).map(i => `<option value=
 const TYPES = ['Motor','Health','Life','Fire','Marine/Transit','Other'];
 const NCB_OPTS = ['0%','20%','25%','35%','45%','50%'];
 const PREV_TYPES = ['Comprehensive','Third Party'];
-const NEW_POLICY_COLS = ['prev_insurer','prev_expiry_date','ncb','prev_idv','prev_premium','prev_policy_type','hypo_bank','nominee_name','nominee_relation','cover_type','payment_link'];
+const NEW_POLICY_COLS = ['prev_insurer','prev_expiry_date','ncb','prev_idv','prev_premium','prev_policy_type','hypo_bank','nominee_name','nominee_relation','cover_type','payment_link','basic_tp_premium'];
+const COMM_CATS = ['Goods Carrying (GCV)'];   // sirf goods gaadi me Basic TP par 5% GST; taxi/rickshaw/tractor/car me sab par 18%
 const VCATS = ['Private Car','Two Wheeler','Goods Carrying (GCV)','Passenger Carrying (PCV)','Commercial Vehicle','Tractor','Not Applicable'];
 const ENDO_TYPES = ['Nominee change','Address change','Name correction','Ownership transfer','Hypothecation add/remove','IDV change','Add-on / cover change','Mobile / email change','Cancellation','Other'];
 const CLAIM_ST = ['Registered','Documents Pending','Under Survey','Approved','Settled','Rejected'];
@@ -385,9 +386,11 @@ function policyForm(p){
   <div class="grid g2"><div class="f"><label>Pichla IDV ₹</label><input name="prev_idv" inputmode="numeric" value="${p.prev_idv ?? ''}"></div>
   <div class="f"><label>Pichla premium ₹</label><input name="prev_premium" inputmode="numeric" value="${p.prev_premium ?? ''}"></div></div>
   <div class="sec">Premium</div>
+  <div class="f"><label>Basic TP premium ₹ <span class="muted small">(sirf goods gaadi GCV me isi par 5% GST lagta hai)</span></label><input name="basic_tp" inputmode="decimal" value="${p.basic_tp_premium ?? ''}"></div>
   <div class="grid g3"><div class="f"><label>Net premium ₹ *</label><input name="net_premium" required inputmode="decimal" value="${p.net_premium ?? ''}"></div>
   <div class="f"><label>GST %</label><input name="gst_rate" inputmode="decimal" value="${p.gst_rate ?? 18}"></div>
   <div class="f"><label>Total ₹ *</label><input name="total_premium" required inputmode="decimal" value="${p.total_premium ?? ''}"></div></div>
+  <div class="info" id="gstLine" style="display:none"></div>
   <div class="sec">Commission</div>
   <div class="grid g3"><div class="f"><label>Aapka % (net par)</label><input name="my_pct" inputmode="decimal" value="${myPct}"></div>
   <div class="f"><label>Aapka commission ₹</label><input name="total_expected_commission" inputmode="decimal" value="${p.total_expected_commission ?? ''}"></div>
@@ -404,7 +407,17 @@ function refreshCompanies(form){ const dl = $('#insl'); if(dl && form.elements.p
 function policyCalc(form, changed){
   const g = n => form.elements[n];
   const net = num(g('net_premium').value), gst = num(g('gst_rate').value);
-  if(['net_premium','gst_rate'].includes(changed)) g('total_premium').value = net ? (Math.round(net * (1 + gst/100) * 100) / 100) : '';
+  const comm = COMM_CATS.includes(g('vehicle_category').value), tp = num(g('basic_tp').value), gl = $('#gstLine');
+  if(changed === 'gst_rate') g('basic_tp').value = '';           // GST % haath se badla to TP-split band
+  const split = comm && tp > 0 && net > 0 && changed !== 'gst_rate';
+  if(split){
+    const tpUse = Math.min(tp, net), g5 = Math.round(tpUse * 5) / 100, g18 = Math.round((net - tpUse) * 18) / 100, gt = Math.round((g5 + g18) * 100) / 100;
+    if(['net_premium','basic_tp','vehicle_category','gst_rate'].includes(changed)){ g('total_premium').value = Math.round((net + gt) * 100) / 100; g('gst_rate').value = Math.round(gt / net * 10000) / 100; }
+    if(gl){ gl.style.display = ''; gl.innerHTML = `GST: Basic TP ${inr(tpUse)} × 5% = <b>${inr(g5)}</b> + baaki ${inr(net - tpUse)} × 18% = <b>${inr(g18)}</b> → kul GST <b>${inr(gt)}</b>`; }
+  } else {
+    if(gl) gl.style.display = 'none';
+    if(['net_premium','gst_rate','basic_tp','vehicle_category'].includes(changed) && !(changed === 'basic_tp' || changed === 'vehicle_category') ) g('total_premium').value = net ? (Math.round(net * (1 + gst/100) * 100) / 100) : '';
+  }
   if(changed === 'my_pct') g('total_expected_commission').value = Math.round(net * num(g('my_pct').value)) / 100;
   if(changed === 'agent_pct') g('agent_commission').value = Math.round(net * num(g('agent_pct').value)) / 100;
   if(['net_premium'].includes(changed)){
@@ -447,7 +460,7 @@ async function savePolicy(form){
       net_premium: net, gst_rate: num(v('gst_rate')), gst_amount: Math.round((total - net) * 100) / 100, total_premium: total,
       commission_mode: 'NET_PREMIUM', total_expected_commission: exp, actual_commission_received: got, commission_pending: exp - got,
       sub_agent_id: v('sub_agent_id') || null, agent_commission: v('sub_agent_id') ? num(v('agent_commission')) : 0,
-      calculation_notes: v('calculation_notes') || null, updated_at: new Date().toISOString(),
+      calculation_notes: v('calculation_notes') || null, updated_at: new Date().toISOString(), basic_tp_premium: v('basic_tp') ? num(v('basic_tp')) : null,
       prev_insurer: v('prev_insurer') || null, prev_expiry_date: v('prev_expiry_date') || null, ncb: v('ncb') || null,
       prev_idv: v('prev_idv') ? Math.round(num(v('prev_idv'))) : null, prev_premium: v('prev_premium') ? Math.round(num(v('prev_premium'))) : null,
       prev_policy_type: v('prev_policy_type') || null, hypo_bank: v('hypo_bank') || null,
@@ -498,7 +511,7 @@ function cleanName(s){
   return titleCase(s);
 }
 function tidyVeh(s){
-  return String(s).replace(/\(\s*\d{4}\s*-?\s*\)/g, ' ').replace(/\s*&\s*/g, ' ').replace(/,/g, ' ').replace(/\b(motors?|motorcycles?|ltd|limited|pvt|private|india)\b\.?/gi, ' ').replace(/\s*-\s*\d+\s*seater/i, ' ').replace(/\bGVW\s*\d+\b/i, ' ').replace(/\s+/g, ' ').trim();
+  return String(s).replace(/\(\s*\d{4}\s*-?\s*\)/g, ' ').replace(/\s*&\s*/g, ' ').replace(/,/g, ' ').replace(/\b(motors?|motorcycles?|ltd|limited|pvt|private|india)\b\.?/gi, ' ').replace(/\s*-\s*\d+\s*seater/i, ' ').replace(/\bGVW\s*\d+\b/i, ' ').replace(/\(\s*\)/g, ' ').replace(/\s+-\s+/g, ' ').replace(/\s+\/\s*$/, '').replace(/\s+/g, ' ').trim();
 }
 
 function parsePolicyText(raw){
@@ -550,7 +563,7 @@ function parsePolicyText(raw){
     /* category */
     const catOf = t => /two[\s-]*wheeler|motor\s*cycle|scooter|\bbike\b/i.test(t) ? 'Two Wheeler'
       : /\bgccv\b|\bgcv\b|goods\s*carry|goods\s*vehicle|public\s*carrier/i.test(t) ? 'Goods Carrying (GCV)'
-      : /\bpcv\b|passenger\s*carry|\btaxi\b|\bbus\b|\bcab\b/i.test(t) ? 'Passenger Carrying (PCV)'
+      : /\bpcv\b|\bpccv\b|passenger\s*carry|carrying\s*passengers|passengers?\s*carrying|\btaxi\b|\bbus\b|\bcab\b|e-?rickshaw|auto[\s-]*rickshaw/i.test(t) ? 'Passenger Carrying (PCV)'
       : /tractor/i.test(t) ? 'Tractor' : /private\s*car|\bcar\b/i.test(t) ? 'Private Car' : /miscellaneous|\bmisc\b/i.test(t) ? 'Commercial Vehicle' : '';
     const cv = flat.match(/class\s*of\s*vehicle\s*[:\-]?\s*(.{0,60})/i);
     const head = flat.slice(0, 2200);
@@ -566,8 +579,8 @@ function parsePolicyText(raw){
 
     /* gaadi ki detail */
     let desc = '';
-    for(const mm of flat.matchAll(/make\s*(?:&|and|\/)\s*model\s*[:\-]?\s*(.+?)\s+(?=type\s*of\s*body|reg\.?\s*no|registration|engine|chassis|year|fuel|cubic|seating|aa\s*membership|vehicle\s*idv|geographical)/gi)){
-      if(!/^(type|year|engine|chassis|cubic|seating|registration|reg|fuel|colou?r|body|gvw)\b/i.test(mm[1]) && /[A-Za-z]{3}/.test(mm[1])){ desc = tidyVeh(mm[1]); break; }
+    for(const mm of flat.matchAll(/make\s*(?:&|and|\/)\s*model\s*[:\-]?\s*(.+?)\s+(?=type\s*of\s*body|reg\.?\s*no|registration|engine|chassis|year|fuel|cubic|seating|aa\s*membership|vehicle\s*idv|geographical|cc\s*\/\s*hp|lcc\b)/gi)){
+      if(!/^(type|year|engine|chassis|cubic|seating|registration|reg|fuel|colou?r|body|gvw)\b/i.test(mm[1]) && /[A-Za-z]{3}/.test(mm[1])){ desc = tidyVeh(mm[1].replace(/^&?\s*variant\s*/i, '')); break; }
     }
     if(!desc){   // Royal Sundaram
       const mk = flat.match(/make\s*of\s*the\s*vehicle\s+(.+?)\s+year/i), md = flat.match(/model\s*description\s+(.+?)\s+(?:engine|type\s*of\s*body|chassis)/i);
@@ -587,16 +600,16 @@ function parsePolicyText(raw){
       const bm = seg.match(new RegExp('\\b(' + brandRe + ')\\b', 'i'));
       if(bm){
         const tail = seg.slice(bm.index);
-        const end = tail.search(/\s(?:\d{1,3}(?:,\d{3})+\.\d{2}|\d{3,}\.\d{2}|(?:19|20)\d{2}\b)/);
+        const end = tail.search(new RegExp('\\s(?:\\d{1,3}(?:,\\d{3})+\\.\\d{2}|\\d{3,}\\.\\d{2}|(?:19|20)\\d{2}\\b|\\d{3,4}\\s*\\/|\\/\\s*(?:' + FUEL_RE + ')\\b)', 'i'));
         desc = tidyVeh(end > 0 ? tail.slice(0, end) : tail.slice(0, 40));
       }
     }
     if(!desc){ const b = VBRANDS.find(x => low.includes(x.toLowerCase())); if(b) desc = b; }
-    const fm = flat.match(new RegExp('fuel\\s*type\\s*[:\\-]?\\s*(' + FUEL_RE + ')', 'i')) || flat.match(new RegExp('type\\s*of\\s*fuel[^A-Za-z]{0,5}(' + FUEL_RE + ')', 'i')) || flat.match(new RegExp('(?:19|20)\\d{2}\\s+(' + FUEL_RE + ')\\b', 'i')) || raw.match(new RegExp('^\\s*(' + FUEL_RE + ')\\s*$', 'im'));
+    const fm = flat.match(new RegExp('fuel\\s*type\\s*[:\\-]?\\s*(' + FUEL_RE + ')', 'i')) || flat.match(new RegExp('type\\s*of\\s*fuel[^A-Za-z]{0,5}(' + FUEL_RE + ')', 'i')) || flat.match(new RegExp('(?:19|20)\\d{2}\\s+(' + FUEL_RE + ')\\b', 'i')) || flat.match(new RegExp('body\\s*\\/\\s*fuel[\\s\\S]{0,80}?\\/\\s*(' + FUEL_RE + ')', 'i')) || raw.match(new RegExp('^\\s*(' + FUEL_RE + ')\\s*$', 'im')) || (desc.match(new RegExp('\\b(' + FUEL_RE + ')\\b', 'i')));
     const fuel = fm ? titleCase(fm[1]).replace(/^Cng$/, 'CNG').replace(/^Lpg$/, 'LPG') : '';
     let yr = '';
     const yrs = [];
-    for(const re of [/year\s*of\s*(?:manufacture|mfg)\.?[^0-9]{0,45}((?:19|20)\d{2})/gi, /(?:manufacturing|mfg\.?)\s*year\s*[:\-]?\s*((?:19|20)\d{2})/gi, new RegExp('(?:' + FUEL_RE + ')\\s+((?:19|20)\\d{2})\\b', 'gi'), /\b((?:19|20)\d{2})\s+\d\s*\+\s*\d\b/g, new RegExp('\\b((?:19|20)\\d{2})\\s+(?:' + FUEL_RE + ')\\b', 'gi')])
+    for(const re of [/mfg\.?\s*month\s*&\s*year\s*[A-Za-z]{3}[\s\-]*((?:19|20)\d{2})/gi, /year\s*of\s*(?:manufacture|mfg)\.?[^0-9]{0,45}((?:19|20)\d{2})/gi, /(?:manufacturing|mfg\.?)\s*year\s*[:\-]?\s*((?:19|20)\d{2})/gi, new RegExp('(?:' + FUEL_RE + ')\\s+((?:19|20)\\d{2})\\b', 'gi'), /\b((?:19|20)\d{2})\s+\d\s*\+\s*\d\b/g, new RegExp('\\b((?:19|20)\\d{2})\\s+(?:' + FUEL_RE + ')\\b', 'gi')])
       for(const mm of flat.matchAll(re)) yrs.push(+mm[1]);
     yr = yrs.find(y => y >= 1985 && y <= new Date().getFullYear() + 1) || '';
     const parts = [desc, fuel, yr].filter(Boolean);
@@ -623,9 +636,10 @@ function parsePolicyText(raw){
   const nameTry = [
     () => raw.match(/insured(?:'s|’s)?\s*name\s*:[ \t]*([^\n]+?)(?:\(GSTIN|[ \t]{2,}|[ \t]*$)/i),            // Oriental, Zuno
     () => raw.match(/name\s*of\s*(?:the\s*)?insured[ \t]*:?[ \t]+([A-Za-z][A-Za-z .]+?)(?:[ \t]{2,}|[ \t]*$)/im),   // United
-    () => raw.match(/\bname[ \t]{1,4}([A-Z][A-Za-z .]+?)[ \t]{2,}vehicle\s*registration/),                   // Digit
+    () => raw.match(/\bname[ \t]{1,4}([A-Z][A-Za-z .]+?)[ \t]{2,}vehicle\s*registration/i),                   // Digit
     () => raw.match(/received\s*with\s*thanks\s*from\s*(?:sri\s*\/\s*smt\s*)?([A-Za-z .]+?)\s*\n/i),          // National
     () => raw.match(/^[ \t]*name[ \t]*:[ \t]+((?:mr|mrs|ms|miss|shri|smt)\.?[ \t]*[A-Za-z .]{2,40}?)[ \t]*$/im),
+    () => raw.match(/code\s*\/\s*name[ \t]*\n?[ \t]*[A-Z0-9\-]+[ \t]*\/[ \t]*([A-Za-z. ]+?)(?:[ \t]{2,}|[ \t]*\n)/i),                  // Shriram
     () => raw.match(/dear\s+((?:mr|mrs|ms|miss|shri|smt)\.?\s*[A-Za-z .]{3,40}?)\s*,/i),                    // SBI
     () => raw.match(/^[ \t]*((?:MR|MRS|MS|MISS|SHRI|SMT)\.?[ \t]*[A-Z][A-Za-z .]{2,40}?)[ \t]*$/m),              // Royal, SBI (sirf naam wali line)
     () => flat.match(/(?:name\s*of\s*(?:the\s*)?(?:policy\s*holder|policyholder|proposer)|policy\s*holder(?:'s)?\s*name|proposer\s*name|customer\s*name|owner\s*name|name\s*of\s*owner)\s*[:\-]?\s*([A-Za-z][A-Za-z .]{2,44}?)(?=\s+(?:address|mobile|phone|e-?mail|policy|contact|date|\d)|\s*[:|]|$)/i)
@@ -664,15 +678,21 @@ function parsePolicyText(raw){
   const dg = flat.match(/net\s*premium\s+igst\s+cgst\s+sgst\s+utgst\s+cess\s+gross\s*premium\s+\S+\s+\S+\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)/i);   // Digit table
   if(dg){ net = +dg[1]; gstAmt = Math.round((+dg[2] + +dg[3] + +dg[4] + +dg[5] + +dg[6]) * 100) / 100; total = +dg[7]; }
   else {
-    const strong = nums(['total\\s*payable\\s*premium', 'net\\s*payable', 'final\\s*premium', 'total\\s*amount(?:\\s*payable)?', 'gross\\s*premium', 'amount\\s*payable', 'premium\\s*payable', 'invoice\\s*value'], 100);
-    const cg = Math.max(0, ...nums(['(?<![A-Za-z])cgst'], 0, '[^0-9A-Za-z]{0,10}')), sg = Math.max(0, ...nums(['(?<![A-Za-z])sgst'], 0, '[^0-9A-Za-z]{0,10}'));
+    const strong = nums(['total\\s*payable\\s*premium', 'net\\s*payable', 'final\\s*premium', 'total\\s*amount(?:\\s*payable)?', 'gross\\s*premium', 'amount\\s*payable', 'premium\\s*payable', 'premium\\s*amount', 'invoice\\s*value'], 100);
+    const TG = '[\\s\\-:=(]{0,6}(?:others?|basic\\s*tp|tp|od|/\\s*utgst|/\\s*ugst)?[\\s\\-:=)]{0,6}';   // "CGST-Basic TP", "SGST/UTGST" jaise label
+    const sum = a => a.reduce((x, y) => x + y, 0), uniq = a => [...new Set(a)];
+    const cgs = nums(['(?<![A-Za-z])cgst'], 0, TG), sgs = nums(['(?<![A-Za-z])sgst'], 0, TG), igs = nums(['(?<![A-Za-z])igst'], 0, TG);
     const gs = [];
-    if(cg && sg) gs.push(Math.round((cg + sg) * 100) / 100);
-    gs.push(...nums(['(?<![A-Za-z])igst', '(?<![A-Za-z])gst(?![A-Za-z])', 'total\\s*gst', 'gst\\s*amount'], 0, '[\\s:=\\-(]{0,8}'));
-    const ts = [...new Set(strong)].sort((a, b) => b - a), gl = [...new Set(gs)];
-    outer: for(const t of ts) for(const g of gl){ const r = t / g; if(r >= 4 && r <= 25){ total = t; gstAmt = g; break outer; } }
+    for(const [x, y] of [[cgs, sgs]]) if(x.length && y.length){ gs.push(sum(x) + sum(y), (sum(x) + sum(y)) / 2, sum(uniq(x)) + sum(uniq(y)), Math.max(...x) + Math.max(...y)); }
+    if(igs.length) gs.push(sum(igs), sum(igs) / 2, sum(uniq(igs)), Math.max(...igs));
+    gs.push(...nums(['(?<![A-Za-z])gst(?![A-Za-z])', 'total\\s*gst', 'gst\\s*amount'], 0, '[\\s:=\\-(]{0,8}'));
+    const ts = uniq(strong).sort((a, b) => b - a), gl = uniq(gs.map(x => Math.round(x * 100) / 100)).filter(x => x > 0);
+    const weak0 = nums(['total\\s*premium', 'net\\s*premium', 'premium\\s*\\(\\s*a\\s*\\+\\s*b\\s*\\)', 'total\\s*package\\s*premium', 'total\\s*liability\\s*premium', 'total\\s*tp\\s*premium', 'taxable\\s*(?:value|premium)', 'premium\\s*before\\s*(?:gst|tax)', 'basic\\s*premium'], 100);
+    // pehle wo jodi jisme total − GST = chhapa hua net premium (sabse bharosemand)
+    outer: for(const t of ts) for(const g of gl){ const r = t / g; if(r >= 4 && r <= 25 && weak0.some(w => Math.abs(w - (t - g)) <= 2.5)){ total = t; gstAmt = g; break outer; } }
+    if(!total) outer2: for(const t of ts) for(const g of gl){ const r = t / g; if(r >= 4 && r <= 25){ total = t; gstAmt = g; break outer2; } }
     if(!total && ts.length) total = ts[0];
-    const weak = nums(['total\\s*premium', 'net\\s*premium', 'premium\\s*\\(\\s*a\\s*\\+\\s*b\\s*\\)', 'total\\s*liability\\s*premium', 'total\\s*tp\\s*premium', 'taxable\\s*(?:value|premium)', 'premium\\s*before\\s*(?:gst|tax)', 'basic\\s*premium'], 100);
+    const weak = weak0;
     const closest = (arr, tgt) => arr.reduce((b, c) => (b === null || Math.abs(c - tgt) < Math.abs(b - tgt)) ? c : b, null);
     if(total && gstAmt){
       const tgt = total - gstAmt, c = closest(weak, tgt);
@@ -684,6 +704,13 @@ function parsePolicyText(raw){
       net = weak[0]; total = Math.round(net * 1.18 * 100) / 100; notes.push('Total premium andaze se (net + 18% GST) bhara hai — check karein');
     }
   }
+  let btpv = 0;
+  for(const mm of fa.matchAll(/basic[\s\-]*(?:tp|third[\s-]*party)[\s\-]*(?:cover|premium|liability)?[^0-9]{0,15}(\d[\d,]*(?:\.\d{1,2})?)/gi)){
+    if(/(?:c|s|i|ut)gst[\s\-]*$/i.test(fa.slice(Math.max(0, mm.index - 8), mm.index))) continue;   // "CGST-Basic TP 112" GST ki line hai
+    const v = amtVal(mm[1]); if(v >= 100){ btpv = v; break; }
+  }
+  const btp = btpv ? [0, btpv] : null;
+  if(btp && ptype === 'Motor' && amtVal(btp[1]) >= 100 && amtVal(btp[1]) < (net || 1e9)) set('basic_tp', amtVal(btp[1]), 'Basic TP');
   if(net && total){
     set('net_premium', net, 'Net premium'); set('total_premium', total, 'Total premium');
     let rate = Math.round((total - net) / net * 10000) / 100;
@@ -764,7 +791,7 @@ async function renderPolicySheet(){
       ${p.previous_policy_number ? `<span>Purani policy</span><span>${esc(p.previous_policy_number)}</span>` : ''}
       ${p.cover_type ? `<span>Cover</span><span>${esc(p.cover_type)}</span>` : ''}${p.hypo_bank ? `<span>Loan (hypothecation)</span><span>${esc(p.hypo_bank)}</span>` : ''}${/^https?:\/\//i.test(p.payment_link || '') ? `<span>Payment link</span><span><a href="${esc(p.payment_link)}" target="_blank" rel="noopener noreferrer">Kholein ↗</a></span>` : ''}${p.nominee_name ? `<span>Nominee</span><span>${esc(p.nominee_name)}${p.nominee_relation ? ' (' + esc(p.nominee_relation) + ')' : ''}</span>` : ''}
       ${p.prev_insurer ? `<span>Pichli company</span><span>${esc(p.prev_insurer)}${p.prev_policy_type ? ' • ' + esc(p.prev_policy_type) : ''}</span>` : ''}${p.prev_expiry_date ? `<span>Pichli expiry</span><span>${fdate(p.prev_expiry_date)}</span>` : ''}${p.ncb ? `<span>NCB</span><span>${esc(p.ncb)}</span>` : ''}${p.prev_idv ? `<span>Pichla IDV</span><span class="money">${inr(p.prev_idv)}</span>` : ''}${p.prev_premium ? `<span>Pichla premium</span><span class="money">${inr(p.prev_premium)}</span>` : ''}
-      <span>Net premium</span><span class="money">${inr(p.net_premium)}</span><span>GST (${num(p.gst_rate)}%)</span><span class="money">${inr(p.gst_amount)}</span><span>Total premium</span><span class="money">${inr(p.total_premium)}</span></div></div>
+      ${num(p.basic_tp_premium) ? `<span>Basic TP</span><span class="money">${inr(p.basic_tp_premium)}</span>` : ''}<span>Net premium</span><span class="money">${inr(p.net_premium)}</span><span>GST (${num(p.gst_rate)}%)</span><span class="money">${inr(p.gst_amount)}</span><span>Total premium</span><span class="money">${inr(p.total_premium)}</span></div></div>
     <div class="card"><h3>💰 Commission</h3><div class="kv"><span>Aapka commission</span><span class="money">${inr(p.total_expected_commission)}</span><span>Company se mila</span><span class="money">${inr(p.actual_commission_received)}</span><span>Company se baaki</span><span class="money ${num(p.commission_pending)>0?'warn':''}">${inr(p.commission_pending)}</span></div></div>
     <div class="card"><h3>🤝 Agent</h3>${ag ? `<div class="kv"><span>Agent</span><span>${esc(ag.name)}</span><span>Banta commission</span><span class="money">${inr(due)}</span><span>Diya gaya</span><span class="money ok">${inr(paid)}</span><span>Dena baaki</span><span class="money ${due-paid>0?'bad':''}">${inr(due - paid)}</span><span>Aapka munafa</span><span class="money b">${inr(num(p.total_expected_commission) - due)}</span></div>
       <div class="row wrap" style="margin-top:10px"><button class="btn sm" data-act="paypol" data-id="${p.id}">＋ Commission diya</button><button class="btn sm ghost" data-act="agent" data-id="${ag.id}">Agent dekhein</button></div>` : '<span class="muted">Direct policy — koi agent nahi.</span>'}</div>
