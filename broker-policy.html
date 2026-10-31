@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>All Brokers - Policy Maker | Masani Finsure</title>
+<style>
+:root{--orange:#ff6b35;--blue:#1e3a8a;--bg:#f1f5f9}
+*{box-sizing:border-box;font-family:system-ui,Segoe UI,Roboto}
+body{margin:0;background:var(--bg)}
+.top{ background:#fff; border-bottom:1px solid #e2e8f0; padding:12px 16px; display:flex; justify-content:space-between; align-items:center; position:sticky; top:0; z-index:10}
+.top b{color:var(--blue)} .top a{color:var(--orange);text-decoration:none;font-weight:700}
+.wrap{max-width:1150px;margin:0 auto;padding:14px;display:grid;grid-template-columns:320px 1fr;gap:14px}
+@media(max-width:900px){.wrap{grid-template-columns:1fr}}
+.card{background:#fff;border-radius:14px;padding:16px;border:1px solid #e2e8f0;box-shadow:0 2px 8px rgba(0,0,0,.04)}
+.label{font-size:12px;font-weight:700;color:#475569;margin:10px 0 4px;display:block}
+.inp{width:100%;padding:11px 12px;border:1px solid #cbd5e1;border-radius:10px;font-size:14px}
+.inp:focus{border-color:var(--orange);outline:none}
+.btn{width:100%;padding:13px;border:0;border-radius:10px;background:var(--blue);color:#fff;font-weight:800;cursor:pointer}
+.btn-orange{background:var(--orange)} .btn:disabled{opacity:.5}
+.step{display:flex;gap:8px;margin-bottom:12px}
+.s{flex:1;height:6px;background:#e2e8f0;border-radius:99px} .s.on{background:var(--orange)}
+.q-head{display:flex;justify-content:space-between;align-items:center}
+.badge{font-size:11px;background:#dcfce7;color:#166534;padding:3px 8px;border-radius:99px;font-weight:700}
+.comp{border:1px solid #e2e8f0;border-radius:12px;padding:12px;margin-top:10px;display:flex;justify-content:space-between;gap:10px}
+.comp.active{border-color:var(--orange);background:#fff7ed}
+.comp b{color:var(--blue)} .small{font-size:12px;color:#64748b}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:600px){.grid2{grid-template-columns:1fr}}
+.kyc-box{background:#f8fafc;border:1px dashed #cbd5e1;padding:12px;border-radius:10px;margin-top:10px}
+</style>
+</head>
+<body>
+<div class="top">
+  <b>Masani Finsure - All Brokers Policy</b>
+  <div><a href="index.html">← CRM pe wapas</a></div>
+</div>
+
+<div class="wrap">
+  <!-- LEFT - Filters like Probus -->
+  <div>
+    <div class="card">
+      <div class="step"><div class="s on" id="s1"></div><div class="s" id="s2"></div><div class="s" id="s3"></div><div class="s" id="s4"></div></div>
+      
+      <div id="panel-vehicle">
+        <h3 style="margin:0">Have a Vehicle Number?</h3>
+        <label class="label">Enter Vehicle Registration Number</label>
+        <input id="vnum" class="inp" placeholder="MP-04-CX-8363" style="text-transform:uppercase">
+        <button class="btn btn-orange" style="margin-top:12px" onclick="goCompare()">COMPARE QUOTES →</button>
+        <p class="small" style="margin-top:10px">Jaise aapke video me tha, waisa hi flow hai.</p>
+      </div>
+
+      <div id="panel-details" style="display:none">
+        <h4 style="margin:0">Vehicle Details</h4>
+        <label class="label">RTO</label><input id="rto" class="inp" value="MP-04">
+        <label class="label">Make / Model</label><input id="model" class="inp" placeholder="MARUTI SWIFT">
+        <label class="label">Fuel</label><select id="fuel" class="inp"><option>Petrol</option><option>Diesel</option><option>CNG</option><option>Electric</option></select>
+        <label class="label">Registration Year</label><input id="regYear" class="inp" type="number" value="2019">
+        
+        <h4 style="margin:16px 0 0">Policy Details</h4>
+        <label class="label">Policy Type</label><select id="ptype" class="inp"><option>Comprehensive</option><option>Third Party</option><option>OD Only</option></select>
+        <label class="label">Previous Expiry</label><input id="expiry" class="inp" type="date">
+        <label class="label">NCB %</label><select id="ncb" class="inp"><option>0</option><option>20</option><option>25</option><option>35</option><option>45</option><option>50</option></select>
+        <label class="label">Any Claim Last Year?</label><select id="claim" class="inp"><option>No</option><option>Yes</option></select>
+        <button class="btn" style="margin-top:12px" onclick="showQuotes()">Show Quotes →</button>
+      </div>
+
+      <div id="panel-custom" style="display:none">
+        <h4 style="margin:0">Customize Policy Details</h4>
+        <label class="label">IDV Value</label><input id="idv" class="inp" placeholder="450000">
+        <label class="label">Additional Cover</label>
+        <label><input type="checkbox" id="c1" checked> Zero Dep</label><br>
+        <label><input type="checkbox" id="c2"> PA Cover for Paid Driver</label><br>
+        <label><input type="checkbox" id="c3" checked> Legal Liability to Paid Driver</label><br>
+        <label class="label">Discount %</label><input id="disc" class="inp" value="0">
+        <button class="btn" style="margin-top:12px" onclick="recalc()">Re-Calculate</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT - Quotes like Probus -->
+  <div>
+    <div class="card">
+      <div class="q-head"><h3 style="margin:0">Insurance Companies Quotes</h3><span class="badge" id="vnumBadge">Enter Number First</span></div>
+      <div id="quotesBox" class="small" style="padding:20px;text-align:center">Pehle left side me gaadi number daal ke COMPARE QUOTES dabao, fir saari companies yahan aayengi jaise video me Zuno, Digit aaye the.</div>
+    </div>
+
+    <div id="kycCard" class="card" style="display:none;margin-top:14px">
+      <h3 style="margin:0">KYC Details + Extra Fields (Hypo / Nominee / Payment Link)</h3>
+      <p class="small">Ye form aapke video ke last wale KYC page jaisa hai. Yahi par aapne jo 3 fields maange the wo add kiye hain.</p>
+      
+      <div class="grid2">
+        <div><label class="label">Pan Card</label><input id="pan" class="inp" placeholder="JHDHD6838U"></div>
+        <div><label class="label">First Name</label><input id="fname" class="inp" placeholder="Masani"></div>
+        <div><label class="label">Middle Name</label><input id="mname" class="inp"></div>
+        <div><label class="label">Last Name</label><input id="lname" class="inp" placeholder="Finsure"></div>
+        <div><label class="label">Gender</label><select id="gender" class="inp"><option>Male</option><option>Female</option></select></div>
+        <div><label class="label">Date of Birth</label><input id="dob" type="date" class="inp"></div>
+        <div><label class="label">Mobile Number *</label><input id="mob" class="inp" placeholder="8770202265"></div>
+        <div><label class="label">Email</label><input id="email" class="inp" placeholder="bestpolicy365@gmail.com"></div>
+        <div><label class="label">Pin Code</label><input id="pin" class="inp" placeholder="462001"></div>
+      </div>
+
+      <div class="kyc-box">
+        <b style="color:var(--orange)">★ Aapke Maange Hue 3 Naye Fields (Isi Page Par)</b>
+        <label class="label">Hypo / Hypothecation Bank (Loan)</label><input id="hypo" class="inp" placeholder="HDFC Bank / Mahindra Finance">
+        <label class="label">Nominee ka Naam</label><input id="nominee" class="inp" placeholder="Nominee Name">
+        <label class="label">Nominee se Rishta</label><input id="relation" class="inp" placeholder="Father / Mother / Wife">
+        <label class="label">Payment Link (PBPartner / Customer Link)</label><input id="paylink" class="inp" placeholder="https://..." style="border-color:var(--orange)">
+      </div>
+
+      <div class="grid2" style="margin-top:14px">
+        <button class="btn btn-orange" onclick="saveToCRM()">✓ Save to CRM</button>
+        <button class="btn" style="background:#fff;color:var(--blue);border:1px solid var(--blue)" onclick="openInProbus()">Open Same No. in Probus →</button>
+      </div>
+      <p id="saveMsg" class="small" style="color:green;font-weight:700"></p>
+    </div>
+  </div>
+</div>
+
+<script>
+let selectedCompany = null;
+let selectedPremium = 0;
+
+function goCompare(){
+  const v = document.getElementById('vnum').value.trim().toUpperCase();
+  if(v.length<5){alert('Gaadi number daalo ex: MP-04-CX-8363');return}
+  document.getElementById('vnumBadge').innerText = v;
+  document.getElementById('rto').value = v.split('-')[0]+'-'+v.split('-')[1]||v.substring(0,5);
+  document.getElementById('panel-vehicle').style.display='none';
+  document.getElementById('panel-details').style.display='block';
+  document.getElementById('s2').classList.add('on');
+  window.scrollTo(0,0);
+}
+function showQuotes(){
+  document.getElementById('panel-details').style.display='none';
+  document.getElementById('panel-custom').style.display='block';
+  document.getElementById('s3').classList.add('on');
+  renderQuotes();
+}
+function renderQuotes(){
+  const idv = document.getElementById('idv').value || '450000';
+  const comps = [
+    {name:'ZUNO', premium:2530, logo:'Z', note:'Private Car Liability'},
+    {name:'DIGIT', premium:2650, logo:'D', note:'IDV: ₹'+idv},
+    {name:'UNITED INDIA', premium:2890, logo:'U', note:'Best Claim Ratio'},
+    {name:'BAJAJ ALLIANZ', premium:3120, logo:'B', note:'Zero Dep Included'},
+    {name:'HDFC ERGO', premium:3350, logo:'H', note:'Cashless Garages'},
+  ];
+  let html='';
+  comps.forEach((c,i)=>{
+    html+=`<div class="comp ${selectedCompany===c.name?'active':''}" onclick="selectComp('${c.name}',${c.premium})">
+      <div><b>${c.name}</b><div class="small">${c.note}</div><div class="small">Premium: ₹ ${c.premium}</div></div>
+      <div><button class="btn" style="padding:8px 14px">${selectedCompany===c.name?'Selected ✓':'Buy Now'}</button></div>
+    </div>`;
+  });
+  document.getElementById('quotesBox').innerHTML = html;
+}
+function selectComp(name,prem){
+  selectedCompany=name; selectedPremium=prem;
+  renderQuotes();
+  document.getElementById('kycCard').style.display='block';
+  document.getElementById('s4').classList.add('on');
+  document.getElementById('kycCard').scrollIntoView({behavior:'smooth'});
+}
+function recalc(){ renderQuotes(); }
+function saveToCRM(){
+  const data={
+    id: Date.now(),
+    vehicleNo: document.getElementById('vnum').value.toUpperCase(),
+    model: document.getElementById('model').value,
+    fuel: document.getElementById('fuel').value,
+    rto: document.getElementById('rto').value,
+    policyType: document.getElementById('ptype').value,
+    ncb: document.getElementById('ncb').value,
+    idv: document.getElementById('idv').value,
+    company: selectedCompany,
+    premium: selectedPremium,
+    pan: document.getElementById('pan').value,
+    firstName: document.getElementById('fname').value,
+    lastName: document.getElementById('lname').value,
+    mobile: document.getElementById('mob').value,
+    email: document.getElementById('email').value,
+    pin: document.getElementById('pin').value,
+    hypo: document.getElementById('hypo').value,
+    nominee: document.getElementById('nominee').value,
+    relation: document.getElementById('relation').value,
+    paymentLink: document.getElementById('paylink').value,
+    dob: document.getElementById('dob').value,
+    createdAt: new Date().toISOString()
+  };
+  let all = JSON.parse(localStorage.getItem('masani_policies')||'[]');
+  all.push(data);
+  localStorage.setItem('masani_policies', JSON.stringify(all));
+  // also try other keys used by your CRM
+  let all2 = JSON.parse(localStorage.getItem('policies')||'[]');
+  all2.push(data);
+  localStorage.setItem('policies', JSON.stringify(all2));
+  
+  document.getElementById('saveMsg').innerText = '✓ CRM me save ho gaya! Ab Home > Policies me dikhega. Vehicle: '+data.vehicleNo;
+}
+function openInProbus(){
+  const v = document.getElementById('vnum').value.trim();
+  window.open('https://businsurance.com/motor-insurance?vehicle='+encodeURIComponent(v), '_blank');
+}
+</script>
+</body>
+</html>
