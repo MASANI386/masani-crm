@@ -203,7 +203,7 @@ function renderLogin(msg){
 
 const NAV = [
   ['home','🏠','Home'], ['policies','📄','Policies'], ['agents','🤝','Agents'],
-  ['renewals','🔔','Renewals'], ['customers','👥','Customers'], ['more','⚙️','More']
+  ['renewals','🔔','Renewals'], ['customers','👥','Customers'], ['bulk','📑','Bulk PDF'], ['more','⚙️','More']
 ];
 const renewalsDue = () => S.policies.filter(p => { const d = daysLeft(p.expiry_date); return d >= 0 && d <= 30; }).length;
 
@@ -214,7 +214,7 @@ function render(){
     <header class="top"><img src="logo.png" alt="Masani Finsure"><span class="sp"></span>
       ${S.installEvt ? '<button class="btn sm ghost" data-act="install">⬇ Install</button>' : ''}
       <span class="who">${esc(S.user.email || '')}</span></header>
-    <nav class="nav">${NAV.map(([id,ic,l]) => `<button data-act="tab" data-id="${id}" class="${S.tab===id?'on':''}"><span class="ic">${ic}</span>${l}${id==='renewals'&&badge?`<span class="badge">${badge}</span>`:''}</button>`).join('')}</nav>
+    <nav class="nav">${NAV.map(([id,ic,l]) => `<button data-act="${id==='bulk'?'bulk':'tab'}" data-id="${id}" class="${S.tab===id?'on':''}"><span class="ic">${ic}</span>${l}${id==='renewals'&&badge?`<span class="badge">${badge}</span>`:''}</button>`).join('')}</nav>
     <main id="main">${S.loaded ? view() : '<div class="empty">Data load ho raha hai…</div>'}</main></div>`;
 }
 function view(){
